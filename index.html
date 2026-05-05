@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Downloader - GitHub Actions</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📥</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">📥</div>
+            <h1>GitHub File Downloader</h1>
+            <p class="subtitle">Download any file via GitHub Actions & get a permanent raw link</p>
+        </header>
+
+        <main>
+            <div class="card download-card">
+                <h2>Download a File</h2>
+                <p class="card-desc">Enter the URL of any file to download it into this repository.</p>
+
+                <form id="downloadForm">
+                    <div class="form-group">
+                        <label for="fileUrl">File URL <span class="required">*</span></label>
+                        <input type="url" id="fileUrl" name="fileUrl" 
+                               placeholder="https://example.com/file.zip" 
+                               required autocomplete="url">
+                        <div class="error-message" id="urlError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customFilename">Custom Filename (optional)</label>
+                        <input type="text" id="customFilename" name="customFilename" 
+                               placeholder="my-file.zip">
+                        <div class="help-text">Leave blank to auto-detect from URL</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="repoInput">GitHub Repository</label>
+                        <input type="text" id="repoInput" name="repoInput" 
+                               placeholder="username/repository" 
+                               value="" autocomplete="off">
+                        <div class="help-text">Leave blank to use your default repo</div>
+                    </div>
+
+                    <button type="submit" class="btn-primary" id="submitBtn">
+                        <span class="btn-icon">⬇️</span>
+                        <span class="btn-text">Start Download</span>
+                    </button>
+                </form>
+
+                <div id="statusContainer" class="status-container hidden">
+                    <div class="status-card">
+                        <div class="spinner"></div>
+                        <div class="status-content">
+                            <h3 id="statusTitle">Triggering workflow...</h3>
+                            <p id="statusMessage">Please wait while we start the download process.</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="resultContainer" class="result-container hidden">
+                    <div class="result-card">
+                        <div class="result-icon success-icon">✅</div>
+                        <h3>Download Started!</h3>
+                        <div class="result-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Workflow URL:</span>
+                                <a id="workflowUrl" href="#" target="_blank" rel="noopener">View in GitHub</a>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Status:</span>
+                                <span id="runStatus" class="status-badge pending">Pending</span>
+                            </div>
+                        </div>
+                        <p class="result-note">The file will be downloaded via GitHub Actions. Check the workflow for progress and your final raw download link.</p>
+                        <button class="btn-secondary" onclick="resetForm()">Download Another File</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card info-card">
+                <h2>How It Works</h2>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Enter URL</h3>
+                            <p>Paste the full URL of any file you want to download</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Trigger Action</h3>
+                            <p>Our GitHub Actions workflow downloads the file</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Get Raw Link</h3>
+                            <p>Receive a permanent raw.githubusercontent.com link</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card files-card">
+                <h2>📂 Downloaded Files</h2>
+                <div id="filesList">
+                    <p class="loading-files">Loading downloaded files...</p>
+                </div>
+                <div id="filesEmpty" class="hidden">
+                    <p class="empty-state">No files downloaded yet. Use the form above to download your first file!</p>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by GitHub Actions & GitHub Pages</p>
+            <p class="footer-links">
+                <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+                &middot;
+                <a href="https://docs.github.com/en/actions" target="_blank" rel="noopener">GitHub Actions</a>
+            </p>
+        </footer>
+    </div>
+
+    <script src="assets/js/app.js"></script>
+</body>
+</html>
