@@ -1,0 +1,174 @@
+name: File Downloader
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_url:
+        description: 'URL of the file to download'
+        required: true
+        type: string
+      custom_filename:
+        description: 'Optional custom filename (leave blank for auto-detection)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate URL
+        id: validate
+        run: |
+          URL="${{ github.event.inputs.file_url }}"
+          echo "Input URL: $URL"
+          
+          # Basic URL validation
+          if [[ ! "$URL" =~ ^https?:// ]]; then
+            echo "error=Invalid URL - must start with http:// or https://" >> $GITHUB_OUTPUT
+            echo "valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          echo "valid=true" >> $GITHUB_OUTPUT
+
+      - name: Extract filename
+        id: filename
+        run: |
+          URL="${{ github.event.inputs.file_url }}"
+          CUSTOM_NAME="${{ github.event.inputs.custom_filename }}"
+          
+          if [ -n "$CUSTOM_NAME" ]; then
+            echo "name=$CUSTOM_NAME" >> $GITHUB_OUTPUT
+          else
+            # Extract filename from URL, handle query strings and fragments
+            BASENAME=$(basename "$URL" | cut -d'?' -f1 | cut -d'#' -f1)
+            
+            # If no extension or empty, generate a name
+            if [ -z "$BASENAME" ] || [ "$BASENAME" = "." ] || [ "$BASENAME" = ".." ]; then
+              BASENAME="downloaded_file"
+            fi
+            
+            # Add timestamp prefix to avoid collisions
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            echo "name=${TIMESTAMP}_${BASENAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create downloads directory
+        run: |
+          mkdir -p downloads
+          echo "Downloads directory ready"
+
+      - name: Download file
+        id: download
+        run: |
+          URL="${{ github.event.inputs.file_url }}"
+          FILENAME="${{ steps.filename.outputs.name }}"
+          OUTPUT_PATH="downloads/$FILENAME"
+          
+          echo "Downloading from: $URL"
+          echo "Saving to: $OUTPUT_PATH"
+          
+          # Download with progress, follow redirects, set timeout
+          if curl -L --max-time 300 --connect-timeout 30 \
+               --retry 3 --retry-delay 5 \
+               -o "$OUTPUT_PATH" \
+               -w "%{http_code}" \
+               "$URL" > /tmp/http_code.txt 2>&1; then
+            
+            HTTP_CODE=$(cat /tmp/http_code.txt)
+            echo "HTTP Status: $HTTP_CODE"
+            
+            # Check if file was downloaded successfully
+            if [ -f "$OUTPUT_PATH" ] && [ -s "$OUTPUT_PATH" ]; then
+              FILE_SIZE=$(stat --format=%s "$OUTPUT_PATH")
+              FILE_TYPE=$(file -b --mime-type "$OUTPUT_PATH")
+              
+              echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+              echo "path=$OUTPUT_PATH" >> $GITHUB_OUTPUT
+              echo "size=$FILE_SIZE" >> $GITHUB_OUTPUT
+              echo "mime_type=$FILE_TYPE" >> $GITHUB_OUTPUT
+              echo "success=true" >> $GITHUB_OUTPUT
+              echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
+              
+              echo "✅ Successfully downloaded file: $FILENAME"
+              echo "📦 Size: $FILE_SIZE bytes"
+              echo "📄 Type: $FILE_TYPE"
+            else
+              echo "success=false" >> $GITHUB_OUTPUT
+              echo "error=Downloaded file is empty or missing" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "error=Failed to download from URL" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Generate file info
+        id: info
+        run: |
+          FILENAME="${{ steps.download.outputs.filename }}"
+          SIZE="${{ steps.download.outputs.size }}"
+          MIME="${{ steps.download.outputs.mime_type }}"
+          REPO="${{ github.repository }}"
+          BRANCH="${{ github.ref_name }}"
+          
+          # Generate the raw download URL
+          RAW_URL="https://raw.githubusercontent.com/$REPO/$BRANCH/downloads/$FILENAME"
+          GITHUB_URL="https://github.com/$REPO/blob/$BRANCH/downloads/$FILENAME"
+          
+          echo "raw_url=$RAW_URL" >> $GITHUB_OUTPUT
+          echo "github_url=$GITHUB_URL" >> $GITHUB_OUTPUT
+          
+          # Create a download log entry
+          cat > downloads/download_info.json << EOF
+          {
+            "filename": "$FILENAME",
+            "source_url": "${{ github.event.inputs.file_url }}",
+            "size_bytes": $SIZE,
+            "mime_type": "$MIME",
+            "downloaded_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "raw_url": "$RAW_URL",
+            "workflow_run": ${{ github.run_id }}
+          }
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          git add downloads/
+          
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add downloaded file: ${{ steps.download.outputs.filename }}"
+            git pull --rebase origin ${{ github.ref_name }}
+            git push origin ${{ github.ref_name }}
+            echo "✅ File committed and pushed"
+          fi
+
+      - name: Generate summary
+        run: |
+          echo "## 📥 Download Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Filename** | \`${{ steps.download.outputs.filename }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Size** | ${{ steps.download.outputs.size }} bytes |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Type** | ${{ steps.download.outputs.mime_type }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Source URL** | ${{ github.event.inputs.file_url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Raw URL** | [${{ steps.info.outputs.raw_url }}](${{ steps.info.outputs.raw_url }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **GitHub URL** | [${{ steps.info.outputs.github_url }}](${{ steps.info.outputs.github_url }}) |" >> $GITHUB_STEP_SUMMARY
