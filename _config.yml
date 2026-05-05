@@ -1,0 +1,14 @@
+# GitHub Pages Configuration
+title: File Downloader
+description: Download any file via GitHub Actions and get a permanent raw link
+theme: jekyll-theme-cayman
+
+# GitHub Pages settings
+github:
+  repository_url: https://github.com/FxMath123/Download
+
+# Exclude workflow files from Jekyll processing
+exclude:
+  - .github/
+  - README.md
+  - LICENSE
